@@ -13,7 +13,18 @@ async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
   });
 
   if (!response.ok) {
-    throw new Error(`Request failed: ${response.status}`);
+    let message = `Request failed: ${response.status}`;
+
+    try {
+      const errorBody = await response.json();
+      if (typeof errorBody?.message === "string") {
+        message = errorBody.message;
+      }
+    } catch {
+      // Ignore JSON parse errors and keep the fallback message.
+    }
+
+    throw new Error(message);
   }
 
   return response.json() as Promise<T>;

@@ -21,8 +21,8 @@ export default function RegisterPage() {
       window.localStorage.setItem("accessToken", response.accessToken);
       window.localStorage.setItem("user", JSON.stringify(response.user));
       router.push("/app");
-    } catch {
-      setStatus("No se pudo crear la cuenta.");
+    } catch (error) {
+      setStatus(error instanceof Error ? error.message : "No se pudo crear la cuenta.");
     }
   };
 
