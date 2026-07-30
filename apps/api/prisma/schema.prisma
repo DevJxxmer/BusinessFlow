@@ -1,0 +1,109 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id           String   @id @default(cuid())
+  email        String   @unique
+  name         String
+  passwordHash String
+  role         String   @default("ADMIN")
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  businesses BusinessMember[]
+}
+
+model Business {
+  id          String           @id @default(cuid())
+  name        String
+  slug        String           @unique
+  currency    String           @default("USD")
+  createdAt   DateTime         @default(now())
+  updatedAt   DateTime         @updatedAt
+  members     BusinessMember[]
+  products    Product[]
+  sales       Sale[]
+  transactions Transaction[]
+}
+
+model BusinessMember {
+  id         String   @id @default(cuid())
+  businessId String
+  userId     String
+  role       String   @default("ADMIN")
+  createdAt  DateTime @default(now())
+
+  business Business @relation(fields: [businessId], references: [id])
+  user     User     @relation(fields: [userId], references: [id])
+
+  @@unique([businessId, userId])
+}
+
+model Product {
+  id           String   @id @default(cuid())
+  businessId   String
+  name         String
+  sku          String
+  barcode      String?
+  category     String?
+  supplier     String?
+  imageUrl     String?
+  description  String?
+  purchasePrice Float
+  salePrice    Float
+  initialStock Int
+  minimumStock Int
+  status       String   @default("ACTIVE")
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  business Business @relation(fields: [businessId], references: [id])
+  sales    SaleItem[]
+}
+
+model Sale {
+  id            String      @id @default(cuid())
+  businessId    String
+  customerName  String
+  paymentMethod String
+  discount      Float       @default(0)
+  subtotal      Float
+  total         Float
+  notes         String?
+  createdAt     DateTime    @default(now())
+
+  business Business    @relation(fields: [businessId], references: [id])
+  items    SaleItem[]
+}
+
+model SaleItem {
+  id        String @id @default(cuid())
+  saleId    String
+  productId String
+  quantity  Int
+  unitPrice Float
+  total     Float
+
+  sale    Sale    @relation(fields: [saleId], references: [id])
+  product Product @relation(fields: [productId], references: [id])
+}
+
+model Transaction {
+  id           String   @id @default(cuid())
+  businessId   String
+  type         String
+  category     String
+  description  String
+  amount       Float
+  date         DateTime @default(now())
+  observations String?
+  createdAt    DateTime @default(now())
+
+  business Business @relation(fields: [businessId], references: [id])
+}
