@@ -1,4 +1,4 @@
-const API_URL = (process.env.NEXT_PUBLIC_API_URL || "https://businessflow-zifa.onrender.com/api").replace(/\/$/, "");
+const API_URL = "https://businessflow-zifa.onrender.com/api";
 
 async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
   const token = typeof window !== "undefined" ? window.localStorage.getItem("accessToken") : null;
