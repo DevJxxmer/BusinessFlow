@@ -1,7 +1,7 @@
 "use client";
 
 import { motion } from "framer-motion";
-import { ArrowRight, BarChart3, CalendarRange } from "lucide-react";
+import { ArrowRight, CalendarRange } from "lucide-react";
 import Link from "next/link";
 
 const metrics = [

@@ -44,6 +44,11 @@ export const api = {
   },
   businesses: {
     list: () => request<{ business: { id: string; name: string; slug: string } }[]>('/businesses'),
+    create: (payload: { name: string; slug: string }) =>
+      request<{ id: string; name: string; slug: string }>('/businesses', {
+        method: 'POST',
+        body: JSON.stringify(payload),
+      }),
   },
   products: {
     list: () =>
@@ -193,5 +198,23 @@ export const api = {
           date: string;
         }>
       >('/transactions'),
+    create: (payload: {
+      type: string;
+      category: string;
+      description: string;
+      amount: number;
+      date?: string;
+    }) =>
+      request<{
+        id: string;
+        type: string;
+        category: string;
+        description: string;
+        amount: number;
+        date: string;
+      }>('/transactions', {
+        method: 'POST',
+        body: JSON.stringify(payload),
+      }),
   },
 };

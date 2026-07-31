@@ -1,15 +1,12 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { useState } from "react";
 
 export function WelcomeNav() {
-  const [isAuthenticated, setIsAuthenticated] = useState(false);
-
-  useEffect(() => {
-    const token = window.localStorage.getItem("accessToken");
-    setIsAuthenticated(Boolean(token));
-  }, []);
+  const [isAuthenticated] = useState(() =>
+    typeof window === 'undefined' ? false : Boolean(window.localStorage.getItem("accessToken")),
+  );
 
   return (
     <div className="flex items-center gap-3">

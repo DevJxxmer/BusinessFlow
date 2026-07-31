@@ -2,7 +2,9 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { PageShell } from "@/components/page-shell";
+import { Modal } from "@/components/modal";
 import { api } from "@/lib/api";
+import { formatCurrency, getStoredCurrency } from "@/lib/utils";
 
 type Product = {
   id: string;
@@ -72,6 +74,9 @@ export default function InventoryPage() {
   const [formError, setFormError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [editingProductId, setEditingProductId] = useState<string | null>(null);
+  const [showEntryModal, setShowEntryModal] = useState(false);
+  const [showExitModal, setShowExitModal] = useState(false);
+  
 
   const loadData = async () => {
     setLoading(true);
@@ -89,8 +94,14 @@ export default function InventoryPage() {
   };
 
   useEffect(() => {
-    loadData();
+    const t = setTimeout(() => {
+      loadData();
+    }, 0);
+
+    return () => clearTimeout(t);
   }, []);
+
+  const [currency] = useState(() => getStoredCurrency());
 
   const resetProductForm = () => {
     setProductFormState(emptyProductForm);
@@ -315,22 +326,52 @@ export default function InventoryPage() {
                 : 'Consulta el stock real calculado por entradas y salidas.'}
             </p>
           </div>
-          {activeTab === 'PRODUCTS' && (
-            <button
-              type="button"
-              className="rounded-full bg-slate-950 px-4 py-2 text-sm font-semibold text-white transition hover:bg-slate-800"
-              onClick={() => {
-                setShowProductForm((current) => !current);
-                resetProductForm();
-              }}
-            >
-              {showProductForm ? 'Cerrar formulario' : editingProductId ? 'Editar producto' : 'Agregar producto'}
-            </button>
-          )}
-        </div>
+          <div className="flex items-center gap-2">
+            {activeTab === 'PRODUCTS' && (
+              <button
+                type="button"
+                className="rounded-full bg-slate-950 px-4 py-2 text-sm font-semibold text-white transition hover:bg-slate-800"
+                onClick={() => {
+                  setShowProductForm(true);
+                  resetProductForm();
+                }}
+              >
+                {editingProductId ? 'Editar producto' : 'Agregar producto'}
+              </button>
+            )}
 
-        {activeTab === 'PRODUCTS' && showProductForm && (
-          <form className="mt-6 space-y-6 rounded-[24px] border border-slate-200 bg-slate-50 p-6" onSubmit={handleProductSubmit}>
+            {activeTab === 'ENTRIES' && (
+              <button
+                type="button"
+                className="rounded-full bg-emerald-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-emerald-700"
+                onClick={() => {
+                  setFormError(null);
+                  setEntryFormState(emptyEntryForm);
+                  setShowEntryModal(true);
+                }}
+              >
+                Registrar entrada
+              </button>
+            )}
+
+            {activeTab === 'EXITS' && (
+              <button
+                type="button"
+                className="rounded-full bg-amber-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-amber-700"
+                onClick={() => {
+                  setFormError(null);
+                  setExitFormState(emptyEntryForm);
+                  setShowExitModal(true);
+                }}
+              >
+                Registrar salida
+              </button>
+            )}
+          </div>
+        </div>
+        {activeTab === 'PRODUCTS' && (
+          <Modal open={showProductForm} onClose={() => setShowProductForm(false)} title={editingProductId ? 'Editar producto' : 'Agregar producto'} footer={null}>
+            <form className="space-y-6" onSubmit={handleProductSubmit}>
             <div className="grid gap-4 lg:grid-cols-3">
               <div>
                 <label className="mb-2 block text-sm font-medium text-slate-700">SKU</label>
@@ -422,113 +463,136 @@ export default function InventoryPage() {
               </select>
             </div>
 
-            {formError && <p className="text-sm text-rose-600">{formError}</p>}
+              {formError && <p className="text-sm text-rose-600">{formError}</p>}
 
-            <div className="flex flex-wrap gap-3">
-              <button
-                type="submit"
-                disabled={saving}
-                className="rounded-full bg-slate-950 px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-slate-800 disabled:opacity-60"
-              >
-                {editingProductId ? 'Guardar producto' : 'Agregar producto'}
-              </button>
-              <button
-                type="button"
-                disabled={saving}
-                className="rounded-full border border-slate-200 bg-white px-5 py-2.5 text-sm font-semibold text-slate-700 transition hover:bg-slate-100"
-                onClick={() => {
-                  resetProductForm();
-                  setShowProductForm(false);
-                }}
-              >
-                Cancelar
-              </button>
-            </div>
-          </form>
+              <div className="flex flex-wrap gap-3">
+                <button
+                  type="submit"
+                  disabled={saving}
+                  className="rounded-full bg-slate-950 px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-slate-800 disabled:opacity-60"
+                >
+                  {editingProductId ? 'Guardar producto' : 'Agregar producto'}
+                </button>
+                <button
+                  type="button"
+                  disabled={saving}
+                  className="rounded-full border border-slate-200 bg-white px-5 py-2.5 text-sm font-semibold text-slate-700 transition hover:bg-slate-100"
+                  onClick={() => {
+                    resetProductForm();
+                    setShowProductForm(false);
+                  }}
+                >
+                  Cancelar
+                </button>
+              </div>
+            </form>
+          </Modal>
         )}
 
         {activeTab === 'ENTRIES' && (
-          <form className="mt-6 space-y-6 rounded-[24px] border border-slate-200 bg-slate-50 p-6" onSubmit={handleEntrySubmit}>
-            <div className="grid gap-4 lg:grid-cols-[1.5fr_1fr_0.8fr]">
-              <div>
-                <label className="mb-2 block text-sm font-medium text-slate-700">Producto</label>
-                <select
-                  value={entryFormState.productId}
-                  onChange={(event) => setEntryFormState((current) => ({ ...current, productId: event.target.value }))}
-                  className="w-full rounded-3xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-900"
-                >
-                  <option value="">Selecciona producto</option>
-                  {products.map((product) => (
-                    <option key={product.id} value={product.id}>
-                      {product.sku} - {product.name}
-                    </option>
-                  ))}
-                </select>
+          <Modal open={showEntryModal} onClose={() => setShowEntryModal(false)} title="Registrar entrada" footer={null}>
+            <form className="space-y-6" onSubmit={handleEntrySubmit}>
+              <div className="grid gap-4 lg:grid-cols-[1.5fr_1fr]">
+                <div>
+                  <label className="mb-2 block text-sm font-medium text-slate-200">Producto</label>
+                  <select
+                    value={entryFormState.productId}
+                    onChange={(event) => setEntryFormState((current) => ({ ...current, productId: event.target.value }))}
+                    className="w-full rounded-3xl border border-slate-700 bg-slate-950 px-4 py-3 text-sm text-white outline-none"
+                  >
+                    <option value="">Selecciona producto</option>
+                    {products.map((product) => (
+                      <option key={product.id} value={product.id}>
+                        {product.sku} - {product.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label className="mb-2 block text-sm font-medium text-slate-200">Cantidad</label>
+                  <input
+                    type="number"
+                    min={1}
+                    value={entryFormState.quantity}
+                    onChange={(event) => setEntryFormState((current) => ({ ...current, quantity: Number(event.target.value) }))}
+                    className="w-full rounded-3xl border border-slate-700 bg-slate-950 px-4 py-3 text-sm text-white outline-none"
+                  />
+                </div>
               </div>
-              <div>
-                <label className="mb-2 block text-sm font-medium text-slate-700">Cantidad</label>
-                <input
-                  type="number"
-                  min={1}
-                  value={entryFormState.quantity}
-                  onChange={(event) => setEntryFormState((current) => ({ ...current, quantity: Number(event.target.value) }))}
-                  className="w-full rounded-3xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-900"
-                />
-              </div>
-              <div className="flex items-end">
+
+              {formError && <p className="text-sm text-rose-400">{formError}</p>}
+
+              <div className="flex gap-3">
                 <button
                   type="submit"
                   disabled={saving}
-                  className="w-full rounded-full bg-emerald-600 px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-emerald-700 disabled:opacity-60"
+                  className="rounded-full bg-emerald-600 px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-emerald-700 disabled:opacity-60"
                 >
                   Añadir entrada
                 </button>
+                <button
+                  type="button"
+                  onClick={() => setShowEntryModal(false)}
+                  className="rounded-full border border-slate-700 bg-slate-900 px-5 py-2.5 text-sm font-semibold text-slate-200 transition hover:border-slate-500"
+                >
+                  Cancelar
+                </button>
               </div>
-            </div>
-            {formError && <p className="text-sm text-rose-600">{formError}</p>}
-          </form>
+            </form>
+          </Modal>
         )}
 
         {activeTab === 'EXITS' && (
-          <form className="mt-6 space-y-6 rounded-[24px] border border-slate-200 bg-slate-50 p-6" onSubmit={handleExitSubmit}>
-            <div className="grid gap-4 lg:grid-cols-[1.5fr_1fr_0.8fr]">
-              <div>
-                <label className="mb-2 block text-sm font-medium text-slate-700">Producto</label>
-                <select
-                  value={exitFormState.productId}
-                  onChange={(event) => setExitFormState((current) => ({ ...current, productId: event.target.value }))}
-                  className="w-full rounded-3xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-900"
-                >
-                  <option value="">Selecciona producto</option>
-                  {products.map((product) => (
-                    <option key={product.id} value={product.id}>
-                      {product.sku} - {product.name}
-                    </option>
-                  ))}
-                </select>
+          <Modal open={showExitModal} onClose={() => setShowExitModal(false)} title="Registrar salida" footer={null}>
+            <form className="space-y-6" onSubmit={handleExitSubmit}>
+              <div className="grid gap-4 lg:grid-cols-[1.5fr_1fr]">
+                <div>
+                  <label className="mb-2 block text-sm font-medium text-slate-200">Producto</label>
+                  <select
+                    value={exitFormState.productId}
+                    onChange={(event) => setExitFormState((current) => ({ ...current, productId: event.target.value }))}
+                    className="w-full rounded-3xl border border-slate-700 bg-slate-950 px-4 py-3 text-sm text-white outline-none"
+                  >
+                    <option value="">Selecciona producto</option>
+                    {products.map((product) => (
+                      <option key={product.id} value={product.id}>
+                        {product.sku} - {product.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label className="mb-2 block text-sm font-medium text-slate-200">Cantidad</label>
+                  <input
+                    type="number"
+                    min={1}
+                    value={exitFormState.quantity}
+                    onChange={(event) => setExitFormState((current) => ({ ...current, quantity: Number(event.target.value) }))}
+                    className="w-full rounded-3xl border border-slate-700 bg-slate-950 px-4 py-3 text-sm text-white outline-none"
+                  />
+                </div>
               </div>
-              <div>
-                <label className="mb-2 block text-sm font-medium text-slate-700">Cantidad</label>
-                <input
-                  type="number"
-                  min={1}
-                  value={exitFormState.quantity}
-                  onChange={(event) => setExitFormState((current) => ({ ...current, quantity: Number(event.target.value) }))}
-                  className="w-full rounded-3xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-900"
-                />
-              </div>
-              <div className="flex items-end">
+
+              {formError && <p className="text-sm text-rose-400">{formError}</p>}
+
+              <div className="flex gap-3">
                 <button
                   type="submit"
                   disabled={saving}
-                  className="w-full rounded-full bg-amber-600 px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-amber-700 disabled:opacity-60"
+                  className="rounded-full bg-amber-600 px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-amber-700 disabled:opacity-60"
                 >
                   Añadir salida
                 </button>
+                <button
+                  type="button"
+                  onClick={() => setShowExitModal(false)}
+                  className="rounded-full border border-slate-700 bg-slate-900 px-5 py-2.5 text-sm font-semibold text-slate-200 transition hover:border-slate-500"
+                >
+                  Cancelar
+                </button>
               </div>
-            </div>
-            {formError && <p className="text-sm text-rose-600">{formError}</p>}
-          </form>
+            </form>
+          </Modal>
         )}
 
         <div className="mt-6 overflow-x-auto">
@@ -588,9 +652,7 @@ export default function InventoryPage() {
                     <tr key={product.id} className="hover:bg-slate-50">
                       <td className="px-4 py-3 text-slate-900">{product.sku}</td>
                       <td className="px-4 py-3 font-medium text-slate-900">{product.name}</td>
-                      <td className="px-4 py-3 text-slate-600">
-                        {new Intl.NumberFormat('es-CO', { style: 'currency', currency: 'USD' }).format(product.salePrice)}
-                      </td>
+                      <td className="px-4 py-3 text-slate-600">{formatCurrency(product.salePrice, currency)}</td>
                       <td className="px-4 py-3">
                         <div className="flex flex-wrap gap-2">
                           <button
@@ -658,14 +720,17 @@ export default function InventoryPage() {
                   </td>
                 </tr>
               ) : (
-                stockReport.map((item) => (
-                  <tr key={item.id} className="hover:bg-slate-50">
-                    <td className="px-4 py-3 font-medium text-slate-900">{item.name}</td>
-                    <td className="px-4 py-3 text-slate-600">{item.entries}</td>
-                    <td className="px-4 py-3 text-slate-600">{item.exits}</td>
-                    <td className="px-4 py-3 text-slate-600">{item.stock}</td>
-                  </tr>
-                ))
+                stockReport.map((item) => {
+                  const low = item.stock <= item.minimumStock;
+                  return (
+                    <tr key={item.id} className={`hover:bg-slate-50 ${low ? 'bg-rose-50' : ''}`}>
+                      <td className="px-4 py-3 font-medium text-slate-900">{item.name}</td>
+                      <td className="px-4 py-3 text-slate-600">{item.entries}</td>
+                      <td className="px-4 py-3 text-slate-600">{item.exits}</td>
+                      <td className={`px-4 py-3 font-semibold ${low ? 'text-rose-600' : 'text-slate-600'}`}>{item.stock}</td>
+                    </tr>
+                  );
+                })
               )}
             </tbody>
           </table>

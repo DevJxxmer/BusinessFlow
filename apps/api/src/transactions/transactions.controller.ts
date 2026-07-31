@@ -1,4 +1,4 @@
-import { Controller, Get, Req, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, Post, Req, UseGuards } from '@nestjs/common';
 import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { TransactionsService } from './transactions.service';
@@ -13,5 +13,20 @@ export class TransactionsController {
   @Get()
   async findAll(@Req() req: any) {
     return this.transactionsService.listForUser(req.user.userId);
+  }
+
+  @Post()
+  async create(
+    @Req() req: any,
+    @Body()
+    body: {
+      type: string;
+      category: string;
+      description: string;
+      amount: number;
+      date?: string;
+    },
+  ) {
+    return this.transactionsService.create(req.user.userId, body);
   }
 }
