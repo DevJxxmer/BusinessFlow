@@ -1,12 +1,29 @@
-import { PageShell } from "@/components/page-shell";
+"use client";
 
-const clients = [
-  { name: "María López", company: "Comercial Flores", email: "maria@flores.com", status: "Activo" },
-  { name: "Luis Ortega", company: "Artes S.A.", email: "luis@artes.com", status: "Nuevo" },
-  { name: "Diana Torres", company: "North Studio", email: "diana@north.com", status: "Activo" },
-];
+import { useEffect, useState } from "react";
+import { PageShell } from "@/components/page-shell";
+import { api } from "@/lib/api";
 
 export default function ClientsPage() {
+  const [clients, setClients] = useState<Array<{ id: string; name: string; slug: string }>>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    async function loadClients() {
+      try {
+        const data = await api.clients.list();
+        setClients(data);
+      } catch (err) {
+        setError(err instanceof Error ? err.message : "No se pudieron cargar los clientes");
+      } finally {
+        setLoading(false);
+      }
+    }
+
+    loadClients();
+  }, []);
+
   return (
     <PageShell className="space-y-6">
       <div className="flex flex-wrap items-center justify-between gap-3">
@@ -18,16 +35,27 @@ export default function ClientsPage() {
       </div>
 
       <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-        {clients.map((client) => (
-          <div key={client.email} className="rounded-[24px] border border-slate-200 bg-white p-5 shadow-sm">
-            <p className="font-semibold text-slate-900">{client.name}</p>
-            <p className="mt-1 text-sm text-slate-600">{client.company}</p>
-            <p className="mt-2 text-sm text-slate-500">{client.email}</p>
-            <span className="mt-4 inline-flex rounded-full bg-emerald-100 px-3 py-1 text-xs font-medium text-emerald-700">
-              {client.status}
-            </span>
+        {loading ? (
+          <div className="col-span-3 rounded-[24px] border border-slate-200 bg-white p-5 text-center text-slate-500 shadow-sm">
+            Cargando clientes...
           </div>
-        ))}
+        ) : error ? (
+          <div className="col-span-3 rounded-[24px] border border-amber-200 bg-amber-50 p-5 text-center text-amber-700 shadow-sm">
+            {error}
+          </div>
+        ) : clients.length === 0 ? (
+          <div className="col-span-3 rounded-[24px] border border-slate-200 bg-white p-5 text-center text-slate-500 shadow-sm">
+            No hay clientes asociados.
+          </div>
+        ) : (
+          clients.map((client) => (
+            <div key={client.id} className="rounded-[24px] border border-slate-200 bg-white p-5 shadow-sm">
+              <p className="font-semibold text-slate-900">{client.name}</p>
+              <p className="mt-1 text-sm text-slate-600">Slug: {client.slug}</p>
+              <p className="mt-2 text-sm text-slate-500">ID: {client.id}</p>
+            </div>
+          ))
+        )}
       </div>
     </PageShell>
   );

@@ -12,13 +12,34 @@ export class AuthService {
 
   async register(data: { email: string; password: string; name: string }) {
     const passwordHash = await bcrypt.hash(data.password, 10);
+    const slugBase = data.name.trim().toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9\-]/g, '');
+    const defaultSlug = `${slugBase || 'empresa'}-${Math.floor(Math.random() * 10000)}`;
 
-    const user = await this.prisma.user.create({
-      data: {
-        email: data.email,
-        name: data.name,
-        passwordHash,
-      },
+    const user = await this.prisma.$transaction(async (tx) => {
+      const user = await tx.user.create({
+        data: {
+          email: data.email,
+          name: data.name,
+          passwordHash,
+        },
+      });
+
+      const business = await tx.business.create({
+        data: {
+          name: `${data.name} Business`,
+          slug: defaultSlug,
+        },
+      });
+
+      await tx.businessMember.create({
+        data: {
+          businessId: business.id,
+          userId: user.id,
+          role: 'ADMIN',
+        },
+      });
+
+      return user;
     });
 
     return this.buildAuthResponse(user);

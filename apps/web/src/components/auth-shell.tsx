@@ -1,11 +1,12 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { api } from "@/lib/api";
 
 export function AuthShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
+  const router = useRouter();
   const [ready, setReady] = useState(false);
   const [authMode, setAuthMode] = useState<"login" | "register">("login");
   const [email, setEmail] = useState("");
@@ -15,10 +16,31 @@ export function AuthShell({ children }: { children: React.ReactNode }) {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
 
   useEffect(() => {
-    const token = window.localStorage.getItem("accessToken");
-    setIsAuthenticated(Boolean(token));
-    setReady(true);
-  }, []);
+    async function verifyToken() {
+      const token = window.localStorage.getItem("accessToken");
+      if (!token) {
+        setIsAuthenticated(false);
+        setReady(true);
+        return;
+      }
+
+      try {
+        await api.auth.me();
+        setIsAuthenticated(true);
+      } catch {
+        window.localStorage.removeItem("accessToken");
+        window.localStorage.removeItem("user");
+        setIsAuthenticated(false);
+        if (!pathname.startsWith("/login") && !pathname.startsWith("/register")) {
+          router.push("/login");
+        }
+      } finally {
+        setReady(true);
+      }
+    }
+
+    verifyToken();
+  }, [pathname, router]);
 
   const handleSubmit = async (event: React.FormEvent) => {
     event.preventDefault();

@@ -5,6 +5,11 @@ import { AppService } from './app.service';
 import { PrismaModule } from './prisma/prisma.module';
 import { AuthModule } from './auth/auth.module';
 import { BusinessesModule } from './businesses/businesses.module';
+import { ProductsModule } from './products/products.module';
+import { SalesModule } from './sales/sales.module';
+import { ClientsModule } from './clients/clients.module';
+import { TransactionsModule } from './transactions/transactions.module';
+import { StockMovementsModule } from './stock-movements/stock-movements.module';
 
 @Module({
   imports: [
@@ -12,6 +17,11 @@ import { BusinessesModule } from './businesses/businesses.module';
     PrismaModule,
     AuthModule,
     BusinessesModule,
+    ProductsModule,
+    SalesModule,
+    ClientsModule,
+    TransactionsModule,
+    StockMovementsModule,
   ],
   controllers: [AppController],
   providers: [AppService],

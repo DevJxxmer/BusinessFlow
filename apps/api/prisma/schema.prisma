@@ -19,17 +19,23 @@ model User {
   businesses BusinessMember[]
 }
 
+enum StockMovementType {
+  ENTRY
+  EXIT
+}
+
 model Business {
-  id          String           @id @default(cuid())
-  name        String
-  slug        String           @unique
-  currency    String           @default("USD")
-  createdAt   DateTime         @default(now())
-  updatedAt   DateTime         @updatedAt
-  members     BusinessMember[]
-  products    Product[]
-  sales       Sale[]
-  transactions Transaction[]
+  id              String           @id @default(cuid())
+  name            String
+  slug            String           @unique
+  currency        String           @default("USD")
+  createdAt       DateTime         @default(now())
+  updatedAt       DateTime         @updatedAt
+  members         BusinessMember[]
+  products        Product[]
+  sales           Sale[]
+  transactions    Transaction[]
+  stockMovements  StockMovement[]
 }
 
 model BusinessMember {
@@ -46,25 +52,26 @@ model BusinessMember {
 }
 
 model Product {
-  id           String   @id @default(cuid())
-  businessId   String
-  name         String
-  sku          String
-  barcode      String?
-  category     String?
-  supplier     String?
-  imageUrl     String?
-  description  String?
+  id            String           @id @default(cuid())
+  businessId    String
+  name          String
+  sku           String
+  barcode       String?
+  category      String?
+  supplier      String?
+  imageUrl      String?
+  description   String?
   purchasePrice Float
-  salePrice    Float
-  initialStock Int
-  minimumStock Int
-  status       String   @default("ACTIVE")
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
+  salePrice     Float
+  initialStock  Int
+  minimumStock  Int
+  status        String           @default("ACTIVE")
+  createdAt     DateTime         @default(now())
+  updatedAt     DateTime         @updatedAt
 
-  business Business @relation(fields: [businessId], references: [id])
-  sales    SaleItem[]
+  business      Business         @relation(fields: [businessId], references: [id])
+  sales         SaleItem[]
+  movements     StockMovement[]
 }
 
 model Sale {
@@ -92,6 +99,18 @@ model SaleItem {
 
   sale    Sale    @relation(fields: [saleId], references: [id])
   product Product @relation(fields: [productId], references: [id])
+}
+
+model StockMovement {
+  id         String             @id @default(cuid())
+  businessId String
+  productId  String
+  type       StockMovementType
+  quantity   Int
+  createdAt  DateTime           @default(now())
+
+  business Business @relation(fields: [businessId], references: [id])
+  product  Product  @relation(fields: [productId], references: [id])
 }
 
 model Transaction {

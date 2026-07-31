@@ -8,26 +8,41 @@ const modules = [
   {
     title: "Dashboard operacional",
     description:
-      "Vista diaria con balance, ventas, ganancias, alertas de stock y accesos rápidos.",
+      "Vista diaria con balance, ventas, ganancias, alertas de stock y accesos rápidos para tomar decisiones con claridad.",
     icon: BarChart3,
   },
   {
     title: "Inventario inteligente",
     description:
-      "Controla productos, SKU, stock mínimo, entradas, salidas y movimientos de auditoría.",
+      "Controla productos, SKU, stock mínimo, entradas, salidas y movimientos de auditoría desde un solo lugar.",
     icon: Boxes,
   },
   {
     title: "Finanzas y agenda",
     description:
-      "Registra ingresos, gastos y pedidos pendientes con flujo claro y seguimiento del negocio.",
+      "Registra ingresos, gastos y pedidos pendientes con flujo claro, seguimiento y control del negocio.",
     icon: Wallet,
   },
   {
     title: "Seguridad multiempresa",
     description:
-      "Cada negocio cuenta con aislamiento total por business_id y permisos por rol.",
+      "Cada negocio cuenta con aislamiento total por business_id y permisos por rol para mantener todo ordenado.",
     icon: ShieldCheck,
+  },
+];
+
+const testimonials = [
+  {
+    quote:
+      "BusinessFlow nos ayudó a centralizar ventas, inventario y agenda sin tener que usar 4 herramientas distintas.",
+    author: "María Ortiz",
+    role: "Directora, Studio Norte",
+  },
+  {
+    quote:
+      "La claridad del panel nos permitió reducir errores y responder más rápido a los pedidos del día a día.",
+    author: "Luis Salazar",
+    role: "Gerente, Nexo Supply",
   },
 ];
 
@@ -125,6 +140,29 @@ export default function Home() {
                 </div>
               );
             })}
+          </div>
+
+          <div className="mt-14 rounded-[32px] border border-slate-200 bg-white p-8 shadow-sm sm:p-10">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div>
+                <p className="text-sm font-semibold uppercase tracking-[0.24em] text-indigo-600">Testimonios</p>
+                <h3 className="mt-2 text-2xl font-semibold tracking-tight text-slate-950">Lo que dicen los equipos que ya lo usan</h3>
+              </div>
+              <div className="rounded-full border border-slate-200 bg-slate-50 px-4 py-2 text-sm font-medium text-slate-600">
+                +200 operaciones al día
+              </div>
+            </div>
+            <div className="mt-8 grid gap-5 lg:grid-cols-2">
+              {testimonials.map((item) => (
+                <div key={item.author} className="rounded-3xl border border-slate-200 bg-slate-50 p-6">
+                  <p className="text-base leading-8 text-slate-700">“{item.quote}”</p>
+                  <div className="mt-4">
+                    <p className="font-semibold text-slate-950">{item.author}</p>
+                    <p className="text-sm text-slate-500">{item.role}</p>
+                  </div>
+                </div>
+              ))}
+            </div>
           </div>
         </PageShell>
       </section>
