@@ -175,6 +175,22 @@ function App() {
     return () => listener.subscription.unsubscribe()
   }, [])
 
+  useEffect(() => {
+    if (!supabase || !isAuthenticated || !selectedProjectId) return
+    if (selectedProjectId.startsWith('local-')) {
+      setSelectedProjectId(null)
+      return
+    }
+    getProjects().then(({ data, error }) => {
+      if (error) {
+        console.warn('Error cargando proyectos:', error.message)
+        return
+      }
+      const exists = data?.some((project) => project.id === selectedProjectId)
+      if (!exists) setSelectedProjectId(null)
+    })
+  }, [isAuthenticated, selectedProjectId])
+
   const totals = useMemo(() => transactions.reduce((result, item) => ({ ...result, [item.type]: result[item.type] + item.amount }), { income: 0, expense: 0 }), [transactions])
   const filteredTransactions = useMemo(() => transactions.filter((item) => {
     const matchesType = transactionFilter === 'all' || item.type === transactionFilter
