@@ -83,7 +83,13 @@ export async function getFinancialTransactions(projectId: string) {
   return supabase.from('financial_transactions').select('id, title, client, product_id, quantity, category, transaction_date, amount, transaction_type, account').eq('project_id', projectId).order('transaction_date', { ascending: false })
 }
 
-export async function createFinancialTransaction(projectId: string, transaction: { title: string; client: string; product_id: string; quantity: number; category: string; transaction_date: string; amount: number; transaction_type: 'income' | 'expense'; account: string }) {
+export async function deleteFinancialTransaction(id: number | string) {
+  if (!supabase) return { error: new Error('Supabase no está configurado') }
+  const { error } = await supabase.from('financial_transactions').delete().eq('id', id)
+  return { error }
+}
+
+export async function createFinancialTransaction(projectId: string, transaction: { title: string; client: string; product_id: string | null; quantity: number; category: string; transaction_date: string; amount: number; transaction_type: 'income' | 'expense'; account: string }) {
   if (!supabase) return { data: null, error: new Error('Supabase no está configurado') }
   return supabase.from('financial_transactions').insert({ project_id: projectId, ...transaction }).select('id, title, client, product_id, quantity, category, transaction_date, amount, transaction_type, account').single()
 }

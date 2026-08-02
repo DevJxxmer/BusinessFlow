@@ -31,14 +31,14 @@ import {
   X,
 } from 'lucide-react'
 import './App.css'
-import { createAgendaEvent, createFinancialTransaction, createInventoryMovement, createProduct, createProject, deleteProject, deleteProduct as deleteProductRemote, updateProduct, getAgendaEvents, getFinancialTransactions, getInventoryMovements, getProducts, getProjects, signInWithPassword, signOut, signUpWithPassword, supabase, updateProject } from './lib/supabase'
+import { createAgendaEvent, createFinancialTransaction, createInventoryMovement, createProduct, createProject, deleteFinancialTransaction, deleteProject, deleteProduct as deleteProductRemote, updateProduct, getAgendaEvents, getFinancialTransactions, getInventoryMovements, getProducts, getProjects, signInWithPassword, signOut, signUpWithPassword, supabase, updateProject } from './lib/supabase'
 
 type View = 'Resumen' | 'Finanzas' | 'Inventario' | 'Agenda' | 'Configuración'
 type PublicScreen = 'welcome' | 'login' | 'signup' | 'projects'
 type TransactionType = 'income' | 'expense'
 type Product = { id: string; name: string; sku: string; price: number }
 type InventoryMovement = { id: number | string; productId: string; quantity: number; date: string }
-type Transaction = { id: number | string; title: string; client: string; productId: string; quantity: number; category: string; date: string; amount: number; type: TransactionType; account: string }
+type Transaction = { id: number | string; title: string; client: string; productId?: string | null; quantity: number; category: string; date: string; amount: number; type: TransactionType; account: string }
 type BusinessSettings = { businessName: string; ownerName: string; email: string; phone: string; currency: string; timezone: string; weekStartsOn: string; reminders: boolean }
 type Project = { id: string; name: string; detail: string; initials: string; color: 'green' | 'coral' }
 
@@ -77,7 +77,7 @@ const currencyCodes: Record<string, string> = { 'USD - Dólar estadounidense': '
 let activeCurrency = 'USD - Dólar estadounidense'
 const formatMoney = (value: number) => { const code = currencyCodes[activeCurrency] ?? 'USD'; const decimals = code === 'COP' ? 0 : 2; return new Intl.NumberFormat(code === 'COP' ? 'es-CO' : 'es-AR', { style: 'currency', currency: code, minimumFractionDigits: decimals, maximumFractionDigits: decimals }).format(value) }
 const formatDate = (date: string) => new Intl.DateTimeFormat('es-ES', { day: '2-digit', month: 'short' }).format(new Date(`${date}T12:00:00`))
-const productName = (productId: string, catalog: Product[]) => catalog.find((product) => product.id === productId)?.name ?? 'Producto no encontrado'
+const productName = (productId: string | null | undefined, catalog: Product[]) => productId ? catalog.find((product) => product.id === productId)?.name ?? 'Producto no encontrado' : 'Producto no encontrado'
 const operationName = (transaction: Transaction) => `${transaction.title} · ${transaction.client}`
 const initialSettings: BusinessSettings = { businessName: 'Jeimer Negocios', ownerName: 'Jeimer Morales', email: 'jeimer@negocios.com', phone: '+54 11 5555 0101', currency: 'USD - Dólar estadounidense', timezone: 'GMT-3 · Buenos Aires', weekStartsOn: 'Lunes', reminders: true }
 const storageKeys = { transactions: 'businessflow:transactions', products: 'businessflow:products', entries: 'businessflow:entries', exits: 'businessflow:exits', settings: 'businessflow:settings', agenda: 'businessflow:agenda', projects: 'businessflow:projects', selectedProject: 'businessflow:selectedProject' } as const
@@ -151,7 +151,7 @@ function App() {
       }
       const localTransactions = loadLocal(storageKeys.transactions, []) as Transaction[]
       for (const t of localTransactions) {
-        await createFinancialTransaction(selectedProjectId, { title: t.title, client: t.client, product_id: t.productId, quantity: t.quantity, category: t.category, transaction_date: t.date, amount: t.amount, transaction_type: t.type, account: t.account })
+        await createFinancialTransaction(selectedProjectId, { title: t.title, client: t.client, product_id: t.productId ?? null, quantity: t.quantity, category: t.category, transaction_date: t.date, amount: t.amount, transaction_type: t.type, account: t.account })
       }
       const localAgenda = loadLocal(storageKeys.agenda, []) as any[]
       for (const a of localAgenda) {
@@ -184,6 +184,14 @@ function App() {
     return matchesType && matchesCategory && matchesSearch
   }), [categoryFilter, products, search, transactionFilter, transactions])
 
+  const deleteTransaction = async (id: number | string) => {
+    if (supabase && selectedProjectId) {
+      const { error } = await deleteFinancialTransaction(id)
+      if (error) { window.alert(error.message); return }
+    }
+    setTransactions((current) => current.filter((item) => item.id !== id))
+  }
+
   if (!isAuthenticated) {
     if (publicScreen === 'welcome') return <WelcomeScreen onStart={() => setPublicScreen('login')} />
     if (publicScreen === 'login') return <LoginScreen message={authMessage} onBack={() => setPublicScreen('welcome')} onSignup={() => { setAuthMessage(''); setPublicScreen('signup') }} onLogin={async (email, password) => { const result = await signInWithPassword(email, password); if (result.error) setAuthMessage(result.error.message); else setPublicScreen('projects') }} onDemo={() => setPublicScreen('projects')} />
@@ -198,15 +206,20 @@ function App() {
   const addTransaction = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault()
     const form = new FormData(event.currentTarget)
-    const quantity = Number(form.get('quantity'))
-    const product = products.find((item) => item.id === form.get('productId'))
-    if (!quantity || quantity <= 0 || !product) return
     const transactionType = form.get('type') as TransactionType
+    const title = String(form.get('title')).trim()
+    const date = String(form.get('date'))
+    const quantity = Number(form.get('quantity'))
+    const client = String(form.get('client'))
+    if (!title || !date || !quantity || quantity <= 0) return
+
     if (transactionType === 'income') {
+      const product = products.find((item) => item.id === form.get('productId'))
+      if (!product) return
       const received = entries.filter((item) => item.productId === product.id).reduce((total, item) => total + item.quantity, 0)
       const sold = exits.filter((item) => item.productId === product.id).reduce((total, item) => total + item.quantity, 0)
       if (quantity > received - sold) { window.alert(`No hay stock suficiente. Disponible: ${received - sold} unidades.`); return }
-      const movementDate = String(form.get('date'))
+      const movementDate = date
       if (supabase && selectedProjectId) {
         const { data, error } = await createInventoryMovement(selectedProjectId, { product_id: product.id, movement_type: 'exit', quantity, movement_date: movementDate })
         if (error || !data) { window.alert(error?.message ?? 'La venta no pudo registrar la salida de inventario.'); return }
@@ -214,10 +227,28 @@ function App() {
       } else {
         setExits((current) => [...current, { id: Date.now(), productId: product.id, quantity, date: movementDate }])
       }
+      const amount = quantity * product.price
+      const category = String(form.get('category'))
+      const account = String(form.get('account'))
+      const client = String(form.get('client'))
+      if (supabase && selectedProjectId) {
+        const { data, error } = await createFinancialTransaction(selectedProjectId, { title, client, product_id: product.id, quantity, category, transaction_date: date, amount, transaction_type: transactionType, account })
+        if (error || !data) { window.alert(error?.message ?? 'La operación no pudo guardarse.'); return }
+        setTransactions((current) => [{ id: data.id, title: data.title, client: data.client, productId: data.product_id, quantity: data.quantity, category: data.category, date: data.transaction_date, amount: Number(data.amount), type: data.transaction_type, account: data.account }, ...current])
+        setIsModalOpen(false)
+        event.currentTarget.reset()
+        return
+      }
+      setTransactions((current) => [{ id: Date.now(), title, client, productId: product.id, quantity, category, date, amount, type: transactionType, account }, ...current])
+      setIsModalOpen(false)
+      event.currentTarget.reset()
+      return
     }
 
+    const amount = Number(form.get('amount'))
+    if (!amount || amount < 0) return
     if (supabase && selectedProjectId) {
-      const { data, error } = await createFinancialTransaction(selectedProjectId, { title: String(form.get('title')), client: String(form.get('client')), product_id: product.id, quantity, category: String(form.get('category')), transaction_date: String(form.get('date')), amount: quantity * product.price, transaction_type: transactionType, account: String(form.get('account')) })
+      const { data, error } = await createFinancialTransaction(selectedProjectId, { title, client, product_id: null, quantity, category: 'Gastos', transaction_date: date, amount, transaction_type: 'expense', account: 'Gastos' })
       if (error || !data) { window.alert(error?.message ?? 'La operación no pudo guardarse.'); return }
       setTransactions((current) => [{ id: data.id, title: data.title, client: data.client, productId: data.product_id, quantity: data.quantity, category: data.category, date: data.transaction_date, amount: Number(data.amount), type: data.transaction_type, account: data.account }, ...current])
       setIsModalOpen(false)
@@ -225,7 +256,7 @@ function App() {
       return
     }
 
-    setTransactions((current) => [{ id: Date.now(), title: String(form.get('title')), client: String(form.get('client')), productId: product.id, quantity, category: String(form.get('category')), date: String(form.get('date')), amount: quantity * product.price, type: transactionType, account: String(form.get('account')) }, ...current])
+    setTransactions((current) => [{ id: Date.now(), title, client, productId: null, quantity, category: 'Gastos', date, amount, type: 'expense', account: 'Gastos' }, ...current])
     setIsModalOpen(false)
     event.currentTarget.reset()
   }
@@ -276,7 +307,7 @@ function App() {
       <main className="main-content"><header className="topbar"><div className="breadcrumb"><span>Espacio de trabajo</span><span>/</span><strong>{activeView}</strong></div><div className="top-actions"><button className="icon-button" aria-label="Notificaciones"><Bell size={19} /><span className="notification-dot" /></button><div className="profile-menu-wrap"><button className="profile-button" onClick={() => { setProfileMenuOpen((open) => !open); setWorkspaceMenuOpen(false) }} aria-expanded={profileMenuOpen}><span className="avatar avatar-small">JM</span><ChevronDown size={15} /></button>{profileMenuOpen && <div className="popover profile-popover"><div className="profile-popover-head"><span className="avatar avatar-small">JM</span><span><strong>Jeimer Morales</strong><small>jeimer@negocios.com</small></span></div><button className="popover-action" onClick={() => { setActiveView('Configuración'); setProfileMenuOpen(false) }}><Settings size={15} /> Configuración</button><button className="popover-action danger" onClick={async () => { await signOut(); setIsAuthenticated(false); setPublicScreen('login'); setProfileMenuOpen(false) }}>Cerrar sesión</button></div>}</div></div></header>
         <div className="page-content">
           {activeView === 'Resumen' && <Dashboard transactions={transactions} totals={totals} period={period} setPeriod={setPeriod} setActiveView={setActiveView} setIsModalOpen={setIsModalOpen} />}
-          {activeView === 'Finanzas' && <FinancePage transactions={filteredTransactions} totals={totals} products={products} search={search} setSearch={setSearch} transactionFilter={transactionFilter} setTransactionFilter={setTransactionFilter} categoryFilter={categoryFilter} setCategoryFilter={setCategoryFilter} setIsModalOpen={setIsModalOpen} />}
+          {activeView === 'Finanzas' && <FinancePage transactions={filteredTransactions} totals={totals} products={products} search={search} setSearch={setSearch} transactionFilter={transactionFilter} setTransactionFilter={setTransactionFilter} categoryFilter={categoryFilter} setCategoryFilter={setCategoryFilter} setIsModalOpen={setIsModalOpen} onDeleteTransaction={deleteTransaction} />}
           {activeView === 'Inventario' && <InventoryPage projectId={selectedProjectId} products={products} setProducts={setProducts} entries={entries} exits={exits} setEntries={setEntries} setExits={setExits} setIsProductModalOpen={setIsProductModalOpen} onEditProduct={(product) => { setEditingProduct(product); setIsProductModalOpen(true) }} />}
           {activeView === 'Agenda' && <AgendaPage projectId={selectedProjectId} />}
           {activeView === 'Configuración' && <>
@@ -362,8 +393,10 @@ function Dashboard({ transactions, totals, period, setPeriod, setActiveView, set
   </>
 }
 
-function FinancePage({ transactions, totals, products, search, setSearch, transactionFilter, setTransactionFilter, categoryFilter, setCategoryFilter, setIsModalOpen }: { transactions: Transaction[]; totals: { income: number; expense: number }; products: Product[]; search: string; setSearch: (value: string) => void; transactionFilter: 'all' | TransactionType; setTransactionFilter: (value: 'all' | TransactionType) => void; categoryFilter: string; setCategoryFilter: (value: string) => void; setIsModalOpen: (value: boolean) => void }) {
-  return <><section className="welcome-row finance-heading"><div><p className="eyebrow">CONTROL FINANCIERO</p><h1>Finanzas</h1><p className="subheading">Administra ingresos, gastos, clientes y productos.</p></div><button className="primary-button" onClick={() => setIsModalOpen(true)}><Plus size={18} /> Nueva operación</button></section><section className="finance-summary"><div><span>Ingresos</span><strong className="summary-income">{formatMoney(totals.income)}</strong><small>Este mes</small></div><div><span>Gastos</span><strong className="summary-expense">{formatMoney(totals.expense)}</strong><small>Este mes</small></div><div><span>Balance neto</span><strong>{formatMoney(totals.income - totals.expense)}</strong><small>Ingresos menos gastos</small></div></section><section className="panel finance-table-panel"><div className="panel-heading"><div><h2>Movimientos</h2><p>{transactions.length} operaciones encontradas</p></div><button className="filter-button"><Filter size={15} /> Filtros</button></div><div className="finance-toolbar"><label className="search-field"><Search size={16} /><input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Buscar cliente, producto..." /></label><div className="filter-tabs"><button className={transactionFilter === 'all' ? 'selected' : ''} onClick={() => setTransactionFilter('all')}>Todos</button><button className={transactionFilter === 'income' ? 'selected' : ''} onClick={() => setTransactionFilter('income')}>Ingresos</button><button className={transactionFilter === 'expense' ? 'selected' : ''} onClick={() => setTransactionFilter('expense')}>Gastos</button></div><select value={categoryFilter} onChange={(event) => setCategoryFilter(event.target.value)} aria-label="Filtrar por categoría"><option>Todas las categorías</option><option>Ventas</option><option>Compras</option><option>Servicios</option><option>Marketing</option></select></div><div className="finance-table-wrap"><table><thead><tr><th>Operación</th><th>Producto</th><th className="align-right">Cantidad</th><th>Categoría</th><th>Fecha</th><th className="align-right">Total</th><th aria-label="Acciones" /></tr></thead><tbody>{transactions.map((transaction) => <tr key={transaction.id}><td><div className="table-operation"><span className={`transaction-icon ${transaction.type}`}><ReceiptText size={16} /></span><strong>{operationName(transaction)}</strong></div></td><td><span className="product-cell">{productName(transaction.productId, products)}</span></td><td className="align-right">{transaction.quantity}</td><td><span className="category-pill">{transaction.category}</span></td><td>{formatDate(transaction.date)}</td><td className={`align-right table-amount ${transaction.type === 'income' ? 'amount-income' : 'amount-expense'}`}>{transaction.type === 'income' ? '+' : '-'} {formatMoney(transaction.amount)}</td><td><button className="row-menu" aria-label={`Opciones para ${operationName(transaction)}`}>•••</button></td></tr>)}</tbody></table>{transactions.length === 0 && <div className="no-results"><Search size={23} /><strong>No encontramos movimientos</strong><span>Prueba con otro filtro o término de búsqueda.</span></div>}</div></section></>
+function FinancePage({ transactions, totals, products, search, setSearch, transactionFilter, setTransactionFilter, categoryFilter, setCategoryFilter, setIsModalOpen, onDeleteTransaction }: { transactions: Transaction[]; totals: { income: number; expense: number }; products: Product[]; search: string; setSearch: (value: string) => void; transactionFilter: 'all' | TransactionType; setTransactionFilter: (value: 'all' | TransactionType) => void; categoryFilter: string; setCategoryFilter: (value: string) => void; setIsModalOpen: (value: boolean) => void; onDeleteTransaction: (id: number | string) => void }) {
+  const [openMenuId, setOpenMenuId] = useState<number | string | null>(null)
+  const [showFilters, setShowFilters] = useState(true)
+  return <><section className="welcome-row finance-heading"><div><p className="eyebrow">CONTROL FINANCIERO</p><h1>Finanzas</h1><p className="subheading">Administra ingresos, gastos, clientes y productos.</p></div><button className="primary-button" onClick={() => setIsModalOpen(true)}><Plus size={18} /> Nueva operación</button></section><section className="finance-summary"><div><span>Ingresos</span><strong className="summary-income">{formatMoney(totals.income)}</strong><small>Este mes</small></div><div><span>Gastos</span><strong className="summary-expense">{formatMoney(totals.expense)}</strong><small>Este mes</small></div><div><span>Balance neto</span><strong>{formatMoney(totals.income - totals.expense)}</strong><small>Ingresos menos gastos</small></div></section><section className="panel finance-table-panel"><div className="panel-heading"><div><h2>Movimientos</h2><p>{transactions.length} operaciones encontradas</p></div><button className="filter-button" type="button" aria-expanded={showFilters} onClick={() => setShowFilters((current) => !current)}><Filter size={15} /> Filtros</button></div><div className={`finance-toolbar${showFilters ? '' : ' collapsed'}`}><label className="search-field"><Search size={16} /><input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Buscar cliente, producto..." /></label><div className="filter-tabs"><button className={transactionFilter === 'all' ? 'selected' : ''} onClick={() => setTransactionFilter('all')}>Todos</button><button className={transactionFilter === 'income' ? 'selected' : ''} onClick={() => setTransactionFilter('income')}>Ingresos</button><button className={transactionFilter === 'expense' ? 'selected' : ''} onClick={() => setTransactionFilter('expense')}>Gastos</button></div><select value={categoryFilter} onChange={(event) => setCategoryFilter(event.target.value)} aria-label="Filtrar por categoría"><option>Todas las categorías</option><option>Ventas</option><option>Compras</option><option>Servicios</option><option>Marketing</option></select></div><div className="finance-table-wrap"><table><thead><tr><th>Operación</th><th>Producto</th><th className="align-right">Cantidad</th><th>Categoría</th><th>Fecha</th><th className="align-right">Total</th><th aria-label="Acciones" /></tr></thead><tbody>{transactions.map((transaction) => <tr key={transaction.id}><td><div className="table-operation"><span className={`transaction-icon ${transaction.type}`}><ReceiptText size={16} /></span><strong>{operationName(transaction)}</strong></div></td><td><span className="product-cell">{productName(transaction.productId, products)}</span></td><td className="align-right">{transaction.quantity}</td><td><span className="category-pill">{transaction.category}</span></td><td>{formatDate(transaction.date)}</td><td className={`align-right table-amount ${transaction.type === 'income' ? 'amount-income' : 'amount-expense'}`}>{transaction.type === 'income' ? '+' : '-'} {formatMoney(transaction.amount)}</td><td><div className="row-menu-wrap"><button type="button" className="row-menu" aria-label={`Opciones para ${operationName(transaction)}`} onClick={() => setOpenMenuId(openMenuId === transaction.id ? null : transaction.id)}>•••</button>{openMenuId === transaction.id && <div className="popover row-popover"><button type="button" className="popover-action danger" onClick={() => { if (!window.confirm('Eliminar esta operación?')) return; onDeleteTransaction(transaction.id); setOpenMenuId(null) }}>Eliminar</button></div>}</div></td></tr>)}</tbody></table>{transactions.length === 0 && <div className="no-results"><Search size={23} /><strong>No encontramos movimientos</strong><span>Prueba con otro filtro o término de búsqueda.</span></div>}</div></section></>
 }
 
 function TransactionRow({ transaction }: { transaction: Transaction }) { return <div className="transaction"><span className={`transaction-icon ${transaction.type}`}><ReceiptText size={16} /></span><div className="transaction-detail"><strong>{operationName(transaction)}</strong><span>{transaction.date === '2025-07-02' ? 'Hoy, 10:42' : formatDate(transaction.date)}</span></div><strong className={transaction.type === 'income' ? 'amount-income' : 'amount-expense'}>{transaction.type === 'income' ? '+' : '-'} {formatMoney(transaction.amount)}</strong></div> }
@@ -471,8 +504,218 @@ function InventoryPage({ projectId, products, setProducts, entries, exits, setEn
 function MovementTable({ title, movements, products, movementProductName, tone }: { title: string; movements: InventoryMovement[]; products: Product[]; movementProductName: (movement: InventoryMovement) => string; tone: 'income' | 'expense' }) { return <section className="panel inventory-table-panel"><div className="panel-heading"><div><h2>{title}</h2><p>{movements.length} movimientos registrados</p></div></div><div className="finance-table-wrap"><table><thead><tr><th>Producto</th><th>Código</th><th className="align-right">Cantidad</th><th>Fecha</th></tr></thead><tbody>{movements.map((movement) => <tr key={movement.id}><td><div className="table-operation"><span className={`transaction-icon ${tone}`}><Package size={16} /></span><strong>{movementProductName(movement)}</strong></div></td><td>{products.find((product) => product.id === movement.productId)?.sku ?? 'Sin código'}</td><td className={`align-right table-amount ${tone === 'expense' ? 'amount-expense' : 'amount-income'}`}>{tone === 'expense' ? '-' : '+'} {movement.quantity}</td><td>{formatDate(movement.date)}</td></tr>)}</tbody></table>{movements.length === 0 && <div className="no-results"><Package size={23} /><strong>No hay movimientos</strong><span>Registra el primero con el botón superior.</span></div>}</div></section> }
 
 function StockTable({ products, getStock }: { products: Product[]; getStock: (productId: string) => { entries: number; exits: number } }) { return <section className="panel inventory-table-panel"><div className="panel-heading"><div><h2>Stock actual</h2><p>Entradas menos salidas por producto</p></div></div><div className="finance-table-wrap"><table><thead><tr><th>Código</th><th>Producto</th><th className="align-right">Entradas</th><th className="align-right">Salidas</th><th className="align-right">Stock</th></tr></thead><tbody>{products.map((product) => { const stock = getStock(product.id); const currentStock = stock.entries - stock.exits; return <tr key={product.id}><td>{product.sku}</td><td><div className="table-operation"><span className="product-avatar"><Package size={16} /></span><strong>{product.name}</strong>{currentStock <= 3 && <span className="low-stock-label">Stock bajo</span>}</div></td><td className="align-right amount-income">{stock.entries}</td><td className="align-right amount-expense">{stock.exits}</td><td className={`align-right stock-value ${currentStock <= 0 ? 'stock-empty' : currentStock <= 3 ? 'stock-low' : ''}`}>{currentStock}</td></tr> })}</tbody></table></div></section> }
-function TransactionModal({ products, onClose, onSubmit }: { products: Product[]; onClose: () => void; onSubmit: (event: FormEvent<HTMLFormElement>) => void }) { return <div className="modal-backdrop" role="presentation" onMouseDown={(event) => event.target === event.currentTarget && onClose()}><section className="modal" role="dialog" aria-modal="true" aria-labelledby="modal-title"><div className="modal-heading"><div><p className="eyebrow">NUEVO MOVIMIENTO</p><h2 id="modal-title">Registrar operación</h2></div><button className="close-button" onClick={onClose} aria-label="Cerrar"><X size={18} /></button></div><form onSubmit={onSubmit}><div className="type-toggle"><label><input type="radio" name="type" value="income" defaultChecked /> <span>Ingreso</span></label><label><input type="radio" name="type" value="expense" /> <span>Gasto</span></label></div><div className="form-row"><label>Cliente<input name="client" required placeholder="Ej. Grupo Norte" /></label><label>Producto<select name="productId" defaultValue={products[0]?.id} required>{products.map((product) => <option key={product.id} value={product.id}>{product.name} · {formatMoney(product.price)}</option>)}</select></label></div><label>Descripción<input name="title" required placeholder="Ej. Pago de cliente" /></label><div className="form-row"><label>Cantidad<input name="quantity" type="number" min="1" step="1" required placeholder="Ej. 3" /><small className="field-hint">El total se calcula con el precio del producto.</small></label><label>Fecha<input name="date" type="date" defaultValue="2025-07-02" required /></label></div><div className="form-row"><label>Categoría<select name="category" defaultValue="Ventas"><option>Ventas</option><option>Compras</option><option>Servicios</option><option>Marketing</option></select></label><label>Cuenta<select name="account" defaultValue="Cuenta principal"><option>Cuenta principal</option><option>Tarjeta corporativa</option><option>Efectivo</option></select></label></div><div className="modal-actions"><button type="button" className="cancel-button" onClick={onClose}>Cancelar</button><button type="submit" className="primary-button">Guardar operación</button></div></form></section></div> }
-function MovementModal({ type, products, error = '', onClose, onSubmit }: { type: 'entry' | 'exit'; products: Product[]; error?: string; onClose: () => void; onSubmit: (event: FormEvent<HTMLFormElement>) => void }) { const isEntry = type === 'entry'; return <div className="modal-backdrop" role="presentation" onMouseDown={(event) => event.target === event.currentTarget && onClose()}><section className="modal" role="dialog" aria-modal="true" aria-labelledby="movement-modal-title"><div className="modal-heading"><div><p className="eyebrow">INVENTARIO</p><h2 id="movement-modal-title">Registrar {isEntry ? 'entrada' : 'salida'}</h2></div><button className="close-button" onClick={onClose} aria-label="Cerrar"><X size={18} /></button></div><form onSubmit={onSubmit}><label>Producto<select name="productId" defaultValue={products[0]?.id} required>{products.map((product) => <option key={product.id} value={product.id}>{product.sku} · {product.name}</option>)}</select></label><div className="form-row"><label>Cantidad<input name="quantity" type="number" min="1" step="1" required placeholder="Ej. 10" /></label><label>Fecha<input name="date" type="date" defaultValue="2025-07-02" required /></label></div><div className={`movement-note ${isEntry ? 'entry-note' : 'exit-note'}`}><Package size={16} /><span>{isEntry ? 'La cantidad se sumará al stock disponible.' : 'La cantidad se restará del stock disponible.'}</span></div>{error && <p className="form-error">{error}</p>}<div className="modal-actions"><button type="button" className="cancel-button" onClick={onClose}>Cancelar</button><button type="submit" className="primary-button">Guardar {isEntry ? 'entrada' : 'salida'}</button></div></form></section></div> }
-function ProductModal({ onClose, onSubmit }: { onClose: () => void; onSubmit: (event: FormEvent<HTMLFormElement>) => void }) { return <div className="modal-backdrop" role="presentation" onMouseDown={(event) => event.target === event.currentTarget && onClose()}><section className="modal" role="dialog" aria-modal="true" aria-labelledby="product-modal-title"><div className="modal-heading"><div><p className="eyebrow">CATÁLOGO LOCAL</p><h2 id="product-modal-title">Agregar producto</h2></div><button className="close-button" onClick={onClose} aria-label="Cerrar"><X size={18} /></button></div><form onSubmit={onSubmit}><label>Nombre del producto<input name="name" required placeholder="Ej. Plan empresarial" /></label><div className="form-row"><label>SKU<input name="sku" required placeholder="Ej. SRV-004" /></label><label>Precio por unidad<input name="price" type="number" min="0.01" step="0.01" required placeholder="0,00" /></label></div><div className="modal-actions"><button type="button" className="cancel-button" onClick={onClose}>Cancelar</button><button type="submit" className="primary-button">Guardar producto</button></div></form></section></div> }
+function TransactionModal({ products, onClose, onSubmit }: { products: Product[]; onClose: () => void; onSubmit: (event: FormEvent<HTMLFormElement>) => void }) {
+  const [transactionType, setTransactionType] = useState<TransactionType>('income')
+
+  return (
+    <div className="modal-backdrop" role="presentation" onMouseDown={(event) => event.target === event.currentTarget && onClose()}>
+      <section className="modal" role="dialog" aria-modal="true" aria-labelledby="modal-title">
+        <div className="modal-heading">
+          <div>
+            <p className="eyebrow">NUEVO MOVIMIENTO</p>
+            <h2 id="modal-title">Registrar operación</h2>
+          </div>
+          <button className="close-button" onClick={onClose} aria-label="Cerrar">
+            <X size={18} />
+          </button>
+        </div>
+        <form onSubmit={onSubmit}>
+          <div className="type-toggle">
+            <label>
+              <input
+                type="radio"
+                name="type"
+                value="income"
+                checked={transactionType === 'income'}
+                onChange={() => setTransactionType('income')}
+              />
+              <span>Ingreso</span>
+            </label>
+            <label>
+              <input
+                type="radio"
+                name="type"
+                value="expense"
+                checked={transactionType === 'expense'}
+                onChange={() => setTransactionType('expense')}
+              />
+              <span>Gasto</span>
+            </label>
+          </div>
+
+          <div className="form-row">
+            <label>
+              Descripción
+              <input name="title" required placeholder="Ej. Pago de cliente" />
+            </label>
+            <label>
+              Fecha
+              <input name="date" type="date" defaultValue="2025-07-02" required />
+            </label>
+          </div>
+
+          <div className="form-row">
+            <label>
+              Cantidad
+              <input name="quantity" type="number" min="1" step="1" required placeholder="Ej. 3" />
+            </label>
+            <label>
+              Monto
+              <input name="amount" type="number" min="0" step="0.01" required placeholder="Ej. 1250.00" />
+            </label>
+          </div>
+
+          {transactionType === 'income' ? (
+            <>
+              <div className="form-row">
+                <label>
+                  Cliente
+                  <input name="client" placeholder="Ej. Grupo Norte" />
+                </label>
+                <label>
+                  Producto
+                  <select name="productId" defaultValue={products[0]?.id}>
+                    {products.map((product) => (
+                      <option key={product.id} value={product.id}>
+                        {product.name} · {formatMoney(product.price)}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              </div>
+              <div className="form-row">
+                <label>
+                  Categoría
+                  <select name="category" defaultValue="Ventas">
+                    <option>Ventas</option>
+                    <option>Compras</option>
+                    <option>Servicios</option>
+                    <option>Marketing</option>
+                  </select>
+                </label>
+                <label>
+                  Cuenta
+                  <select name="account" defaultValue="Cuenta principal">
+                    <option>Cuenta principal</option>
+                    <option>Tarjeta corporativa</option>
+                    <option>Efectivo</option>
+                  </select>
+                </label>
+              </div>
+            </>
+          ) : (
+            <div className="form-note">
+              <small>Para un gasto, completa sólo Nombre del gasto, Monto, Cantidad y Fecha.</small>
+            </div>
+          )}
+
+          <div className="modal-actions">
+            <button type="button" className="cancel-button" onClick={onClose}>
+              Cancelar
+            </button>
+            <button type="submit" className="primary-button">
+              Guardar movimiento
+            </button>
+          </div>
+        </form>
+      </section>
+    </div>
+  )
+}
+function MovementModal({ type, products, error = '', onClose, onSubmit }: { type: 'entry' | 'exit'; products: Product[]; error?: string; onClose: () => void; onSubmit: (event: FormEvent<HTMLFormElement>) => void }) {
+  const isEntry = type === 'entry'
+
+  return (
+    <div className="modal-backdrop" role="presentation" onMouseDown={(event) => event.target === event.currentTarget && onClose()}>
+      <section className="modal" role="dialog" aria-modal="true" aria-labelledby="movement-modal-title">
+        <div className="modal-heading">
+          <div>
+            <p className="eyebrow">INVENTARIO</p>
+            <h2 id="movement-modal-title">Registrar {isEntry ? 'entrada' : 'salida'}</h2>
+          </div>
+          <button className="close-button" onClick={onClose} aria-label="Cerrar">
+            <X size={18} />
+          </button>
+        </div>
+        <form onSubmit={onSubmit}>
+          <label>
+            Producto
+            <select name="productId" defaultValue={products[0]?.id} required>
+              {products.map((product) => (
+                <option key={product.id} value={product.id}>
+                  {product.sku} · {product.name}
+                </option>
+              ))}
+            </select>
+          </label>
+          <div className="form-row">
+            <label>
+              Cantidad
+              <input name="quantity" type="number" min="1" step="1" required placeholder="Ej. 10" />
+            </label>
+            <label>
+              Fecha
+              <input name="date" type="date" defaultValue="2025-07-02" required />
+            </label>
+          </div>
+          <div className={`movement-note ${isEntry ? 'entry-note' : 'exit-note'}`}>
+            <Package size={16} />
+            <span>{isEntry ? 'La cantidad se sumará al stock disponible.' : 'La cantidad se restará del stock disponible.'}</span>
+          </div>
+          {error && <p className="form-error">{error}</p>}
+          <div className="modal-actions">
+            <button type="button" className="cancel-button" onClick={onClose}>
+              Cancelar
+            </button>
+            <button type="submit" className="primary-button">
+              Guardar {isEntry ? 'entrada' : 'salida'}
+            </button>
+          </div>
+        </form>
+      </section>
+    </div>
+  )
+}
+function ProductModal({ onClose, onSubmit }: { onClose: () => void; onSubmit: (event: FormEvent<HTMLFormElement>) => void }) {
+  return (
+    <div className="modal-backdrop" role="presentation" onMouseDown={(event) => event.target === event.currentTarget && onClose()}>
+      <section className="modal" role="dialog" aria-modal="true" aria-labelledby="product-modal-title">
+        <div className="modal-heading">
+          <div>
+            <p className="eyebrow">CATÁLOGO LOCAL</p>
+            <h2 id="product-modal-title">Agregar producto</h2>
+          </div>
+          <button className="close-button" onClick={onClose} aria-label="Cerrar">
+            <X size={18} />
+          </button>
+        </div>
+        <form onSubmit={onSubmit}>
+          <label>
+            Nombre del producto
+            <input name="name" required placeholder="Ej. Plan empresarial" />
+          </label>
+          <div className="form-row">
+            <label>
+              SKU
+              <input name="sku" required placeholder="Ej. SRV-004" />
+            </label>
+            <label>
+              Precio por unidad
+              <input name="price" type="number" min="0.01" step="0.01" required placeholder="0,00" />
+            </label>
+          </div>
+          <div className="modal-actions">
+            <button type="button" className="cancel-button" onClick={onClose}>
+              Cancelar
+            </button>
+            <button type="submit" className="primary-button">
+              Guardar producto
+            </button>
+          </div>
+        </form>
+      </section>
+    </div>
+  )
+}
 
 export default App
