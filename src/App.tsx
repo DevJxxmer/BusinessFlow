@@ -48,30 +48,6 @@ const navigation: { label: View; icon: typeof LayoutDashboard }[] = [
   { label: 'Inventario', icon: Package },
   { label: 'Agenda', icon: CalendarDays },
 ]
-const initialProducts: Product[] = [
-  { id: 'consultoria-base', name: 'Consultoría base', sku: 'SRV-001', price: 850 },
-  { id: 'plan-mensual', name: 'Plan mensual', sku: 'SRV-002', price: 129 },
-  { id: 'kit-inicial', name: 'Kit inicial', sku: 'PRD-001', price: 420 },
-  { id: 'soporte-premium', name: 'Soporte premium', sku: 'SRV-003', price: 320 },
-]
-const initialTransactions: Transaction[] = [
-  { id: 1, title: 'Pago recibido', client: 'Grupo Norte', productId: 'consultoria-base', quantity: 5, category: 'Ventas', date: '2025-07-02', amount: 4280, type: 'income', account: 'Cuenta principal' },
-  { id: 2, title: 'Compra de insumos', client: 'Proveedor Uno', productId: 'kit-inicial', quantity: 2, category: 'Compras', date: '2025-07-01', amount: 860.5, type: 'expense', account: 'Cuenta principal' },
-  { id: 3, title: 'Suscripción software', client: 'BusinessFlow', productId: 'plan-mensual', quantity: 1, category: 'Servicios', date: '2025-06-28', amount: 129, type: 'expense', account: 'Tarjeta corporativa' },
-  { id: 4, title: 'Factura', client: 'Estudio Creativo', productId: 'soporte-premium', quantity: 8, category: 'Ventas', date: '2025-06-26', amount: 2450, type: 'income', account: 'Cuenta principal' },
-  { id: 5, title: 'Publicidad redes sociales', client: 'BusinessFlow', productId: 'soporte-premium', quantity: 1, category: 'Marketing', date: '2025-06-24', amount: 320, type: 'expense', account: 'Tarjeta corporativa' },
-  { id: 6, title: 'Pago recibido', client: 'Café Central', productId: 'plan-mensual', quantity: 4, category: 'Ventas', date: '2025-06-22', amount: 1780, type: 'income', account: 'Cuenta principal' },
-]
-const initialEntries: InventoryMovement[] = [
-  { id: 1, productId: 'kit-inicial', quantity: 18, date: '2025-07-01' },
-  { id: 2, productId: 'plan-mensual', quantity: 12, date: '2025-06-28' },
-  { id: 3, productId: 'soporte-premium', quantity: 10, date: '2025-06-26' },
-]
-const initialExits: InventoryMovement[] = [
-  { id: 1, productId: 'kit-inicial', quantity: 4, date: '2025-07-02' },
-  { id: 2, productId: 'plan-mensual', quantity: 5, date: '2025-07-02' },
-  { id: 3, productId: 'soporte-premium', quantity: 3, date: '2025-06-27' },
-]
 const chartValues = [40, 54, 46, 68, 52, 78, 62, 88, 72, 96, 80, 100]
 const currencyCodes: Record<string, string> = { 'USD - Dólar estadounidense': 'USD', 'ARS - Peso argentino': 'ARS', 'COP - Peso colombiano': 'COP', 'EUR - Euro': 'EUR' }
 let activeCurrency = 'USD - Dólar estadounidense'
@@ -79,7 +55,7 @@ const formatMoney = (value: number) => { const code = currencyCodes[activeCurren
 const formatDate = (date: string) => new Intl.DateTimeFormat('es-ES', { day: '2-digit', month: 'short' }).format(new Date(`${date}T12:00:00`))
 const productName = (productId: string | null | undefined, catalog: Product[]) => productId ? catalog.find((product) => product.id === productId)?.name ?? 'Producto no encontrado' : 'Producto no encontrado'
 const operationName = (transaction: Transaction) => `${transaction.title} · ${transaction.client}`
-const initialSettings: BusinessSettings = { businessName: 'Jeimer Negocios', ownerName: 'Jeimer Morales', email: 'jeimer@negocios.com', phone: '+54 11 5555 0101', currency: 'USD - Dólar estadounidense', timezone: 'GMT-3 · Buenos Aires', weekStartsOn: 'Lunes', reminders: true }
+const initialSettings: BusinessSettings = { businessName: '', ownerName: '', email: '', phone: '', currency: 'USD - Dólar estadounidense', timezone: '', weekStartsOn: 'Lunes', reminders: false }
 const storageKeys = { transactions: 'businessflow:transactions', products: 'businessflow:products', entries: 'businessflow:entries', exits: 'businessflow:exits', settings: 'businessflow:settings', agenda: 'businessflow:agenda', projects: 'businessflow:projects', selectedProject: 'businessflow:selectedProject' } as const
 function loadLocal<T>(key: string, fallback: T): T { try { const value = window.localStorage.getItem(key); return value ? JSON.parse(value) as T : fallback } catch { return fallback } }
 
@@ -90,10 +66,10 @@ function App() {
   const [authMessage, setAuthMessage] = useState('')
   const [activeView, setActiveView] = useState<View>('Resumen')
   const [period, setPeriod] = useState('Últimos 30 días')
-  const [transactions, setTransactions] = useState(() => loadLocal(storageKeys.transactions, initialTransactions))
-  const [products, setProducts] = useState(() => loadLocal(storageKeys.products, initialProducts))
-  const [entries, setEntries] = useState(() => loadLocal(storageKeys.entries, initialEntries))
-  const [exits, setExits] = useState(() => loadLocal(storageKeys.exits, initialExits))
+  const [transactions, setTransactions] = useState<Transaction[]>([])
+  const [products, setProducts] = useState<Product[]>([])
+  const [entries, setEntries] = useState<InventoryMovement[]>([])
+  const [exits, setExits] = useState<InventoryMovement[]>([])
   const [transactionFilter, setTransactionFilter] = useState<'all' | TransactionType>('all')
   const [categoryFilter, setCategoryFilter] = useState('Todas las categorías')
   const [search, setSearch] = useState('')
@@ -101,9 +77,11 @@ function App() {
   const [isProductModalOpen, setIsProductModalOpen] = useState(false)
   const [editingProduct, setEditingProduct] = useState<Product | null>(null)
   const [settings, setSettings] = useState(() => loadLocal(storageKeys.settings, initialSettings))
+  const [projects, setProjects] = useState<Project[]>([])
   const [workspaceMenuOpen, setWorkspaceMenuOpen] = useState(false)
   const [profileMenuOpen, setProfileMenuOpen] = useState(false)
   activeCurrency = settings.currency
+  const activeProject = projects.find((project) => project.id === selectedProjectId)
 
   useEffect(() => {
     if (!supabase || !selectedProjectId) return
@@ -176,6 +154,24 @@ function App() {
   }, [])
 
   useEffect(() => {
+    if (!supabase || !isAuthenticated) return
+    getProjects().then(({ data, error }) => {
+      if (error) {
+        console.warn('Error cargando proyectos:', error.message)
+        return
+      }
+      if (!data) return
+      setProjects(data.map((project, index) => ({
+        id: project.id,
+        name: project.name,
+        detail: index === 0 ? 'Proyecto principal' : 'Proyecto compartido',
+        initials: project.name.split(' ').map((part: string) => part[0]).join('').slice(0, 2).toUpperCase(),
+        color: index % 2 === 0 ? 'green' : 'coral',
+      })))
+    })
+  }, [isAuthenticated])
+
+  useEffect(() => {
     if (!supabase || !isAuthenticated || !selectedProjectId) return
     if (selectedProjectId.startsWith('local-')) {
       setSelectedProjectId(null)
@@ -210,7 +206,7 @@ function App() {
 
   if (!isAuthenticated) {
     if (publicScreen === 'welcome') return <WelcomeScreen onStart={() => setPublicScreen('login')} />
-    if (publicScreen === 'login') return <LoginScreen message={authMessage} onBack={() => setPublicScreen('welcome')} onSignup={() => { setAuthMessage(''); setPublicScreen('signup') }} onLogin={async (email, password) => { const result = await signInWithPassword(email, password); if (result.error) setAuthMessage(result.error.message); else setPublicScreen('projects') }} onDemo={() => setPublicScreen('projects')} />
+    if (publicScreen === 'login') return <LoginScreen message={authMessage} onBack={() => setPublicScreen('welcome')} onSignup={() => { setAuthMessage(''); setPublicScreen('signup') }} onLogin={async (email, password) => { const result = await signInWithPassword(email, password); if (result.error) setAuthMessage(result.error.message); else setPublicScreen('projects') }} />
     if (publicScreen === 'signup') return <SignupScreen message={authMessage} onBack={() => { setAuthMessage(''); setPublicScreen('login') }} onSignup={async (name, email, password) => { const result = await signUpWithPassword(email, password, name); if (result.error) setAuthMessage(result.error.message); else { setAuthMessage('Cuenta creada. Revisa tu correo para confirmar el acceso.'); setPublicScreen('login') } }} />
     return <ProjectScreen onBack={() => setPublicScreen('login')} onSelect={(projectId) => { setSelectedProjectId(projectId); setIsAuthenticated(true) }} />
   }
@@ -316,9 +312,9 @@ function App() {
     <div className="app-shell">
       <aside className="sidebar">
         <div className="brand"><span className="brand-mark">b</span><span>business<span className="brand-accent">flow</span></span></div>
-        <div className="workspace-menu-wrap"><button className="workspace-switcher" onClick={() => { setWorkspaceMenuOpen((open) => !open); setProfileMenuOpen(false) }} aria-expanded={workspaceMenuOpen}><span className="workspace-dot">JN</span><span className="workspace-name">Jeimer Negocios<small>Plan profesional</small></span><ChevronDown size={15} /></button>{workspaceMenuOpen && <div className="popover workspace-popover"><span className="popover-label">TUS PROYECTOS</span><button className="popover-option selected" onClick={() => setWorkspaceMenuOpen(false)}><span className="workspace-dot small-dot">JN</span><span><strong>Jeimer Negocios</strong><small>Proyecto activo</small></span></button><button className="popover-option" onClick={() => setWorkspaceMenuOpen(false)}><span className="workspace-dot small-dot coral-dot">EC</span><span><strong>Estudio Creativo</strong><small>Proyecto compartido</small></span></button><button className="popover-create" onClick={() => setWorkspaceMenuOpen(false)}><Plus size={14} /> Crear proyecto</button></div>}</div>
+        <div className="workspace-menu-wrap"><button className="workspace-switcher" onClick={() => { setWorkspaceMenuOpen((open) => !open); setProfileMenuOpen(false) }} aria-expanded={workspaceMenuOpen}><span className={`workspace-dot ${activeProject?.color ?? 'green'}`}>{activeProject?.initials ?? 'BF'}</span><span className="workspace-name">{activeProject?.name ?? 'Mi negocio'}<small>{activeProject?.detail ?? 'Proyecto activo'}</small></span><ChevronDown size={15} /></button>{workspaceMenuOpen && <div className="popover workspace-popover"><span className="popover-label">TUS PROYECTOS</span>{projects.length > 0 ? projects.map((project) => (<button key={project.id} className={`popover-option ${project.id === selectedProjectId ? 'selected' : ''}`} onClick={() => { setSelectedProjectId(project.id); setWorkspaceMenuOpen(false) }}><span className={`workspace-dot ${project.color}`}>{project.initials}</span><span><strong>{project.name}</strong><small>{project.detail}</small></span></button>)) : <div className="popover-empty">No se encontraron proyectos.</div>}<button className="popover-create" onClick={() => { setWorkspaceMenuOpen(false); setActiveView('Configuración') }}><Plus size={14} /> Gestionar proyectos</button></div>}</div>
         <nav aria-label="Navegación principal"><span className="nav-label">Espacio de trabajo</span>{navigation.map(({ label, icon: Icon }) => <button key={label} className={`nav-item ${activeView === label ? 'active' : ''}`} onClick={() => setActiveView(label)}><Icon size={18} /><span>{label}</span></button>)}<span className="nav-label nav-label-lower">Cuenta</span><button className={`nav-item ${activeView === 'Configuración' ? 'active' : ''}`} onClick={() => setActiveView('Configuración')}><Settings size={18} /><span>Configuración</span></button></nav>
-        <div className="sidebar-bottom"><div className="help-link"><CircleHelp size={17} /><span>Centro de ayuda</span></div><div className="user-card"><span className="avatar">JM</span><span><strong>Jeimer Morales</strong><small>Administrador</small></span><ChevronDown size={15} /></div></div>
+        <div className="sidebar-bottom"><div className="help-link"><CircleHelp size={17} /><span>Centro de ayuda</span></div><div className="user-card"><span className="avatar">US</span><span><strong>Mi cuenta</strong><small>Administrador</small></span><ChevronDown size={15} /></div></div>
       </aside>
       <main className="main-content"><header className="topbar"><div className="breadcrumb"><span>Espacio de trabajo</span><span>/</span><strong>{activeView}</strong></div><div className="top-actions"><button className="icon-button" aria-label="Notificaciones"><Bell size={19} /><span className="notification-dot" /></button><div className="profile-menu-wrap"><button className="profile-button" onClick={() => { setProfileMenuOpen((open) => !open); setWorkspaceMenuOpen(false) }} aria-expanded={profileMenuOpen}><span className="avatar avatar-small">JM</span><ChevronDown size={15} /></button>{profileMenuOpen && <div className="popover profile-popover"><div className="profile-popover-head"><span className="avatar avatar-small">JM</span><span><strong>Jeimer Morales</strong><small>jeimer@negocios.com</small></span></div><button className="popover-action" onClick={() => { setActiveView('Configuración'); setProfileMenuOpen(false) }}><Settings size={15} /> Configuración</button><button className="popover-action danger" onClick={async () => { await signOut(); setIsAuthenticated(false); setPublicScreen('login'); setProfileMenuOpen(false) }}>Cerrar sesión</button></div>}</div></div></header>
         <div className="page-content">
@@ -371,10 +367,10 @@ function WelcomeScreen({ onStart }: { onStart: () => void }) {
   return <main className="public-screen welcome-screen"><div className="public-nav"><div className="brand public-brand"><span className="brand-mark">b</span><span>business<span className="brand-accent">flow</span></span></div><button className="public-login-link" onClick={onStart}>Iniciar sesión <ArrowRight size={16} /></button></div><div className="welcome-content"><div className="welcome-copy"><p className="eyebrow">GESTIÓN CLARA PARA NEGOCIOS EN CRECIMIENTO</p><h1>Tu negocio,<br /><em>en movimiento.</em></h1><p>Una forma más simple de tener tus finanzas, inventario y agenda en un solo lugar.</p><button className="primary-button welcome-cta" onClick={onStart}>Comenzar ahora <ArrowRight size={17} /></button><div className="welcome-proof"><span className="proof-avatars"><i>JM</i><i>GN</i><i>CC</i></span><span>Todo tu negocio,<br /><strong>más claro cada día.</strong></span></div></div><div className="welcome-visual"><div className="visual-orbit orbit-one" /><div className="visual-orbit orbit-two" /><div className="visual-board"><div className="visual-board-top"><span>Resumen del negocio</span><span className="visual-dots">•••</span></div><div className="visual-balance"><small>Saldo disponible</small><strong>$ 24.680,50</strong><span><ArrowUpRight size={13} /> 12,8% este mes</span></div><div className="visual-chart"><i style={{ height: '42%' }} /><i style={{ height: '56%' }} /><i style={{ height: '45%' }} /><i style={{ height: '70%' }} /><i style={{ height: '61%' }} /><i style={{ height: '84%' }} /><i style={{ height: '68%' }} /><i style={{ height: '94%' }} /></div><div className="visual-lines"><span /><span /><span /></div></div><div className="floating-note note-income"><span><ArrowUpRight size={15} /></span><div><small>Ingresos este mes</small><strong>$ 18.420,00</strong></div></div><div className="floating-note note-agenda"><span><CalendarDays size={15} /></span><div><small>Próxima actividad</small><strong>Revisión de propuesta</strong></div></div></div></div><section className="welcome-info"><div className="welcome-section-intro"><p className="eyebrow">TODO EN UN MISMO LUGAR</p><h2>Menos vueltas.<br /><em>Más claridad.</em></h2><p>BusinessFlow reúne las herramientas que necesitas para llevar el día a día de tu empresa con una visión completa.</p></div><div className="feature-grid">{features.map(({ icon: Icon, title, text }) => <article className="feature-item" key={title}><span className="feature-icon"><Icon size={19} /></span><h3>{title}</h3><p>{text}</p></article>)}</div></section><section className="welcome-process"><div><p className="eyebrow">ASÍ DE SIMPLE</p><h2>Empieza con una visión<br /><em>más ordenada.</em></h2></div><div className="process-steps"><div><span>01</span><strong>Crea tu espacio</strong><p>Organiza cada negocio o proyecto por separado.</p></div><div><span>02</span><strong>Carga tu operación</strong><p>Registra productos, movimientos y actividades.</p></div><div><span>03</span><strong>Decide mejor</strong><p>Consulta el estado real de tu negocio.</p></div></div></section><section className="welcome-final"><div><p className="eyebrow">TU NEGOCIO MERECE CLARIDAD</p><h2>Todo listo para<br /><em>dar el siguiente paso.</em></h2></div><button className="primary-button" onClick={onStart}>Comenzar ahora <ArrowRight size={17} /></button></section><div className="welcome-footer"><span>Finanzas</span><span>Inventario</span><span>Agenda</span><span>Todo conectado en un solo espacio</span></div></main>
 }
 
-function LoginScreen({ message, onBack, onSignup, onLogin, onDemo }: { message: string; onBack: () => void; onSignup: () => void; onLogin: (email: string, password: string) => void; onDemo: () => void }) {
+function LoginScreen({ message, onBack, onSignup, onLogin }: { message: string; onBack: () => void; onSignup: () => void; onLogin: (email: string, password: string) => void }) {
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
-    return <main className="public-screen auth-screen"><div className="auth-decoration" /><button className="back-link" onClick={onBack}>← Volver al inicio</button><section className="auth-card"><div className="brand public-brand"><span className="brand-mark">b</span><span>business<span className="brand-accent">flow</span></span></div><div className="auth-heading"><p className="eyebrow">BIENVENIDO DE NUEVO</p><h1>Inicia sesión</h1><p>Continúa gestionando tu negocio con claridad.</p></div>{message && <p className="auth-message">{message}</p>}<form onSubmit={(event) => { event.preventDefault(); if (email && password) onLogin(email, password) }}><label>Correo electrónico<div className="input-with-icon"><Mail size={16} /><input type="email" required value={email} onChange={(event) => setEmail(event.target.value)} placeholder="tu@empresa.com" /></div></label><label>Contraseña<div className="input-with-icon"><LockKeyhole size={16} /><input type="password" required value={password} onChange={(event) => setPassword(event.target.value)} placeholder="Tu contraseña" /></div></label><button className="primary-button auth-submit" type="submit">Iniciar sesión <ArrowRight size={16} /></button></form><button className="forgot-link">¿Olvidaste tu contraseña?</button><div className="auth-divider"><span>o continúa con</span></div><button className="secondary-auth-button" type="button" onClick={onDemo}>Acceso de demostración</button><p className="signup-prompt">¿Aún no tienes una cuenta? <button type="button" onClick={onSignup}>Crear cuenta</button></p><p className="auth-legal">Al continuar aceptas nuestros términos de uso y política de privacidad.</p></section></main>
+    return <main className="public-screen auth-screen"><div className="auth-decoration" /><button className="back-link" onClick={onBack}>← Volver al inicio</button><section className="auth-card"><div className="brand public-brand"><span className="brand-mark">b</span><span>business<span className="brand-accent">flow</span></span></div><div className="auth-heading"><p className="eyebrow">BIENVENIDO DE NUEVO</p><h1>Inicia sesión</h1><p>Continúa gestionando tu negocio con claridad.</p></div>{message && <p className="auth-message">{message}</p>}<form onSubmit={(event) => { event.preventDefault(); if (email && password) onLogin(email, password) }}><label>Correo electrónico<div className="input-with-icon"><Mail size={16} /><input type="email" required value={email} onChange={(event) => setEmail(event.target.value)} placeholder="tu@empresa.com" /></div></label><label>Contraseña<div className="input-with-icon"><LockKeyhole size={16} /><input type="password" required value={password} onChange={(event) => setPassword(event.target.value)} placeholder="Tu contraseña" /></div></label><button className="primary-button auth-submit" type="submit">Iniciar sesión <ArrowRight size={16} /></button></form><button className="forgot-link">¿Olvidaste tu contraseña?</button><p className="signup-prompt">¿Aún no tienes una cuenta? <button type="button" onClick={onSignup}>Crear cuenta</button></p><p className="auth-legal">Al continuar aceptas nuestros términos de uso y política de privacidad.</p></section></main>
 }
 
 function SignupScreen({ message, onBack, onSignup }: { message: string; onBack: () => void; onSignup: (name: string, email: string, password: string) => void }) {
@@ -386,17 +382,67 @@ function SignupScreen({ message, onBack, onSignup }: { message: string; onBack: 
 }
 
 function ProjectScreen({ onBack, onSelect }: { onBack: () => void; onSelect: (projectId: string) => void }) {
-  const fallbackProjects: Project[] = [{ id: 'local-1', name: 'Jeimer Negocios', detail: 'Negocio principal', initials: 'JN', color: 'green' }, { id: 'local-2', name: 'Estudio Creativo', detail: 'Proyecto compartido', initials: 'EC', color: 'coral' }]
-  const [projects, setProjects] = useState<Project[]>(() => loadLocal(storageKeys.projects, fallbackProjects))
+  const [projects, setProjects] = useState<Project[]>([])
   const [creating, setCreating] = useState(false)
   const [managing, setManaging] = useState(false)
   const [name, setName] = useState('')
   const [error, setError] = useState('')
-  useEffect(() => { if (supabase) getProjects().then(({ data, error: loadError }) => { if (loadError) setError(loadError.message); else if (data) setProjects(data.map((project, index) => ({ id: project.id, name: project.name, detail: index === 0 ? 'Proyecto principal' : 'Proyecto compartido', initials: project.name.split(' ').map((part: string) => part[0]).join('').slice(0, 2).toUpperCase(), color: index % 2 === 0 ? 'green' : 'coral' }))) }) }, [])
-  const handleCreateProject = async (event: FormEvent<HTMLFormElement>) => { event.preventDefault(); const cleanName = name.trim(); if (!cleanName) return; const initials = cleanName.split(' ').map((part) => part[0]).join('').slice(0, 2).toUpperCase(); if (supabase) { const { data, error: createError } = await supabase.auth.getUser().then(({ data: userData }) => userData.user ? createProject(cleanName, userData.user.id) : { data: null, error: new Error('Sesión no encontrada') }); if (createError || !data) { setError(createError?.message ?? 'No se pudo crear el proyecto'); return } const newProject: Project = { id: data.id, name: data.name, detail: 'Proyecto nuevo', initials, color: 'green' }; setProjects((current) => [...current, newProject]); onSelect(data.id); } else { const newProject: Project = { id: `local-${Date.now()}`, name: cleanName, detail: 'Proyecto nuevo', initials, color: 'green' }; setProjects((current) => [...current, newProject]); onSelect(newProject.id); } setName(''); setCreating(false) }
-  const handleRename = async (project: Project) => { const nextName = window.prompt('Nuevo nombre del negocio', project.name)?.trim(); if (!nextName || nextName === project.name) return; if (supabase && !project.id.startsWith('local-')) { const { error: updateError } = await updateProject(project.id, nextName); if (updateError) { setError(updateError.message); return } } setProjects((current) => current.map((item) => item.id === project.id ? { ...item, name: nextName, initials: nextName.split(' ').map((part) => part[0]).join('').slice(0, 2).toUpperCase() } : item)) }
-  const handleDelete = async (project: Project) => { if (projects.length === 1 || !window.confirm(`¿Eliminar el negocio "${project.name}"?`)) return; if (supabase && !project.id.startsWith('local-')) { const { error: deleteError } = await deleteProject(project.id); if (deleteError) { setError(deleteError.message); return } } setProjects((current) => current.filter((item) => item.id !== project.id)) }
-  useEffect(() => { if (!supabase) window.localStorage.setItem(storageKeys.projects, JSON.stringify(projects)) }, [projects])
+  useEffect(() => {
+    if (!supabase) {
+      setError('Supabase no está configurado. Conecta Supabase para ver proyectos.')
+      return
+    }
+    getProjects().then(({ data, error: loadError }) => {
+      if (loadError) setError(loadError.message)
+      else if (data) setProjects(data.map((project, index) => ({
+        id: project.id,
+        name: project.name,
+        detail: index === 0 ? 'Proyecto principal' : 'Proyecto compartido',
+        initials: project.name.split(' ').map((part: string) => part[0]).join('').slice(0, 2).toUpperCase(),
+        color: index % 2 === 0 ? 'green' : 'coral',
+      })))
+    })
+  }, [])
+  const handleCreateProject = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault()
+    const cleanName = name.trim()
+    if (!cleanName || !supabase) return
+    const initials = cleanName.split(' ').map((part) => part[0]).join('').slice(0, 2).toUpperCase()
+    const { data, error: createError } = await supabase.auth.getUser().then(({ data: userData }) => userData.user ? createProject(cleanName, userData.user.id) : { data: null, error: new Error('Sesión no encontrada') })
+    if (createError || !data) {
+      setError(createError?.message ?? 'No se pudo crear el proyecto')
+      return
+    }
+    const newProject: Project = { id: data.id, name: data.name, detail: 'Proyecto nuevo', initials, color: 'green' }
+    setProjects((current) => [...current, newProject])
+    onSelect(data.id)
+    setName('')
+    setCreating(false)
+  }
+  const handleRename = async (project: Project) => {
+    const nextName = window.prompt('Nuevo nombre del negocio', project.name)?.trim()
+    if (!nextName || nextName === project.name || !supabase) return
+    const { error: updateError } = await updateProject(project.id, nextName)
+    if (updateError) {
+      setError(updateError.message)
+      return
+    }
+    setProjects((current) => current.map((item) => item.id === project.id ? {
+      ...item,
+      name: nextName,
+      initials: nextName.split(' ').map((part) => part[0]).join('').slice(0, 2).toUpperCase(),
+    } : item))
+  }
+  const handleDelete = async (project: Project) => {
+    if (projects.length === 1 || !window.confirm(`¿Eliminar el negocio "${project.name}"?`)) return
+    if (!supabase) return
+    const { error: deleteError } = await deleteProject(project.id)
+    if (deleteError) {
+      setError(deleteError.message)
+      return
+    }
+    setProjects((current) => current.filter((item) => item.id !== project.id))
+  }
   return <main className="public-screen project-screen"><div className="project-topbar"><div className="brand public-brand"><span className="brand-mark">b</span><span>business<span className="brand-accent">flow</span></span></div><span className="project-user"><span className="avatar avatar-small">JM</span> Jeimer Morales</span></div><section className="project-content"><div className="project-heading-row"><div><p className="eyebrow">TU ESPACIO DE TRABAJO</p><h1>{managing ? 'Administrar negocios' : 'Elige un proyecto'}</h1><p className="subheading">{managing ? 'Edita o elimina tus espacios de trabajo.' : 'Selecciona el negocio que quieres gestionar.'}</p></div><button className="manage-projects-button" onClick={() => setManaging((current) => !current)}>{managing ? 'Volver a elegir' : 'Administrar negocios'}</button></div>{error && <p className="auth-message">{error}</p>}<div className="project-list">{projects.map((project) => managing ? <div className="project-card managed" key={project.id}><span className={`project-icon ${project.color}`}>{project.initials}</span><span><strong>{project.name}</strong><small>{project.detail}</small></span><button className="project-action" onClick={() => handleRename(project)}>Renombrar</button><button className="project-action danger" onClick={() => handleDelete(project)}>Eliminar</button></div> : <button className="project-card" key={project.id} onClick={() => onSelect(project.id)}><span className={`project-icon ${project.color}`}>{project.initials}</span><span><strong>{project.name}</strong><small>{project.detail}</small></span><ArrowRight size={18} /></button>)}{creating ? <form className="new-project-form" onSubmit={handleCreateProject}><label>Nombre del negocio<input autoFocus required value={name} onChange={(event) => setName(event.target.value)} placeholder="Ej. Mi empresa" /></label><div><button type="button" className="cancel-button" onClick={() => setCreating(false)}>Cancelar</button><button type="submit" className="primary-button">Crear negocio</button></div></form> : <button className="new-project-card" onClick={() => setCreating(true)}><Plus size={17} /><span>Agregar un nuevo negocio</span></button>}</div><button className="back-link project-back" onClick={onBack}>← Volver al inicio de sesión</button></section></main>
 }
 
@@ -418,14 +464,8 @@ function FinancePage({ transactions, totals, products, search, setSearch, transa
 function TransactionRow({ transaction }: { transaction: Transaction }) { return <div className="transaction"><span className={`transaction-icon ${transaction.type}`}><ReceiptText size={16} /></span><div className="transaction-detail"><strong>{operationName(transaction)}</strong><span>{transaction.date === '2025-07-02' ? 'Hoy, 10:42' : formatDate(transaction.date)}</span></div><strong className={transaction.type === 'income' ? 'amount-income' : 'amount-expense'}>{transaction.type === 'income' ? '+' : '-'} {formatMoney(transaction.amount)}</strong></div> }
 function Chart() { return <div className="chart"><div className="y-axis"><span>$20k</span><span>$15k</span><span>$10k</span><span>$5k</span><span>$0</span></div><div className="chart-area"><div className="grid-lines"><i /><i /><i /><i /><i /></div><div className="bars">{chartValues.map((value, index) => <div className="bar-group" key={index}><div className="bar income-bar" style={{ height: `${value}%` }} /><div className="bar expense-bar" style={{ height: `${Math.max(22, value - 30)}%` }} /></div>)}</div><div className="x-axis"><span>01 Jun</span><span>08 Jun</span><span>15 Jun</span><span>22 Jun</span><span>30 Jun</span></div></div></div> }
 type AgendaEvent = { id: number; title: string; client: string; date: string; time: string; duration: string; type: 'reunion' | 'tarea' | 'recordatorio'; location: string; status: 'confirmada' | 'pendiente' }
-const initialAgendaEvents: AgendaEvent[] = [
-  { id: 1, title: 'Revisión de propuesta', client: 'Grupo Norte', date: '2025-07-02', time: '09:30', duration: '45 min', type: 'reunion', location: 'Videollamada', status: 'confirmada' },
-  { id: 2, title: 'Entrega de materiales', client: 'Proveedor Uno', date: '2025-07-02', time: '12:00', duration: '30 min', type: 'tarea', location: 'Oficina principal', status: 'pendiente' },
-  { id: 3, title: 'Llamada de seguimiento', client: 'Café Central', date: '2025-07-02', time: '15:30', duration: '30 min', type: 'recordatorio', location: 'Videollamada', status: 'confirmada' },
-  { id: 4, title: 'Cierre mensual', client: 'BusinessFlow', date: '2025-07-03', time: '10:00', duration: '60 min', type: 'tarea', location: 'Oficina principal', status: 'pendiente' },
-]
 function AgendaPage({ projectId }: { projectId: string | null }) {
-  const [events, setEvents] = useState(() => loadLocal(storageKeys.agenda, initialAgendaEvents))
+  const [events, setEvents] = useState<any[]>(() => loadLocal(storageKeys.agenda, []))
   const [selectedDate, setSelectedDate] = useState('2025-07-02')
   const [isEventModalOpen, setIsEventModalOpen] = useState(false)
   const [viewMode, setViewMode] = useState<'day' | 'week'>('day')
